@@ -1,6 +1,7 @@
 use clap;
 use serde_json;
-use std::fs::File;
+use std::fs;
+use std::fs::ReadDir;
 use std::io::prelude::*;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -17,7 +18,28 @@ fn get_playlist_videos(url: &str) -> Result<String, std::io::Error> {
     Ok(json_output)
 }
 
+fn list_files(output_path: &str) -> Vec<String> {
+    let mut files: Vec<String> = Vec::new();
+
+    match fs::read_dir(output_path) {
+        Ok(entries) => {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    if entry.path().is_file() {
+                        // Check if it's a file
+                        let file_name = entry.file_name().into_string().unwrap();
+                        files.push(file_name);
+                    }
+                }
+            }
+        }
+        Err(e) => eprintln!("Error reading directory: {}", e),
+    };
+    files
+}
+
 fn dl_playlist(urls: Vec<String>, output_path: &str) -> Result<(), std::io::Error> {
+    // structure the output_path
     let mut output: String = String::from_str("").unwrap();
     output += output_path;
     output += "%(title)s.%(ext)s";
@@ -63,38 +85,40 @@ fn format_json(json_output: &str) -> Result<(), Box<dyn std::error::Error>> {
     let json_value: serde_json::Value = serde_json::from_str(json_output)?;
     let pretty_json = serde_json::to_string_pretty(&json_value)?;
 
-    let mut file = File::create("playlist.json")?;
+    let mut file = fs::File::create("playlist.json")?;
     file.write(pretty_json.as_bytes())?;
 
     Ok(())
 }
 
-fn extract_links(v: serde_json::Value) -> Vec<String> {
-    /*
-    entries []
-    -> url
-    */
+fn extract_links(v: serde_json::Value, output_path: &str) -> Vec<String> {
     let mut urls: Vec<String> = Vec::new();
+
+    // load all local files already downloaded
+    let local_files = list_files(output_path);
 
     if let Some(entries) = v["entries"].as_array() {
         for video in entries {
-            if let Some(title) = video["title"].as_str() {
-                println!("{}", title);
-            }
-
             if let Some(url) = video["url"].as_str() {
-                urls.push(url.to_string());
+                if let Some(title) = video["title"].as_str() {
+                    if local_files.contains(&title.to_string()) {
+                        println!("Already DL {}", title);
+                    } else {
+                        urls.push(url.to_string());
+                    }
+                }
             }
         }
     } else {
         println!("No 'entries' filed find in the JSON!");
     }
-
+    println!("{} already dl", urls.len());
+    todo!();
     urls
 }
 
 fn read_json() -> Result<serde_json::Value, std::io::Error> {
-    let mut file = File::open("playlist.json")?;
+    let mut file = fs::File::open("playlist.json")?;
     let v: serde_json::Value = serde_json::from_reader(file)?;
     Ok(v)
 }
@@ -131,8 +155,7 @@ fn main() {
     */
 
     let v: serde_json::Value = read_json().unwrap();
-    println!("{}", v);
-    let videos_urls = extract_links(v);
+    let videos_urls = extract_links(v, output_path);
     match dl_playlist(videos_urls, output_path) {
         Ok(_) => {}
         Err(e) => println!("Error: {}", e),
