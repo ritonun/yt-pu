@@ -1,12 +1,10 @@
-use serde_json::Value;
+use clap;
+use serde_json;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Write;
-use std::process::Command;
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 use std::str::FromStr;
-
-mod config;
 
 fn get_playlist_videos(url: &str) -> Result<String, std::io::Error> {
     println!("yt-dlp --flat-playlist -J {}", url);
@@ -19,9 +17,9 @@ fn get_playlist_videos(url: &str) -> Result<String, std::io::Error> {
     Ok(json_output)
 }
 
-fn dl_playlist(urls: Vec<String>) -> Result<(), std::io::Error> {
+fn dl_playlist(urls: Vec<String>, output_path: &str) -> Result<(), std::io::Error> {
     let mut output: String = String::from_str("").unwrap();
-    output += config::output_path;
+    output += output_path;
     output += "%(title)s.%(ext)s";
 
     for url in urls {
@@ -102,7 +100,25 @@ fn read_json() -> Result<serde_json::Value, std::io::Error> {
 }
 
 fn main() {
-    let url = config::playlist_url;
+    let matches = clap::Command::new("yt-pu")
+        .version("0.1.0")
+        .about("Keep a local save of your yt playlist")
+        .arg(
+            clap::Arg::new("output_path")
+                .short('o')
+                .long("output_path")
+                .required(true)
+                .help("Specify the location of the local folder"),
+        )
+        .arg(
+            clap::Arg::new("url")
+                .required(true)
+                .help("URL of the youtube playlist"),
+        )
+        .get_matches();
+
+    let url: &str = matches.get_one::<String>("url").unwrap();
+    let output_path: &str = matches.get_one::<String>("output_path").unwrap();
     /*
     let json = match get_playlist_videos(url) {
         Ok(json) => json,
@@ -117,7 +133,7 @@ fn main() {
     let v: serde_json::Value = read_json().unwrap();
     println!("{}", v);
     let videos_urls = extract_links(v);
-    match dl_playlist(videos_urls) {
+    match dl_playlist(videos_urls, output_path) {
         Ok(_) => {}
         Err(e) => println!("Error: {}", e),
     }
