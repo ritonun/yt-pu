@@ -2,3 +2,4 @@
 dev/
 *.json
 config.rs
+cache/
