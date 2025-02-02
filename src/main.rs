@@ -1,7 +1,6 @@
 use clap;
 use serde_json;
 use std::fs;
-use std::fs::ReadDir;
 use std::io::prelude::*;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -27,7 +26,10 @@ fn list_files(output_path: &str) -> Vec<String> {
                 if let Ok(entry) = entry {
                     if entry.path().is_file() {
                         // Check if it's a file
-                        let file_name = entry.file_name().into_string().unwrap();
+                        let mut file_name = entry.file_name().into_string().unwrap();
+                        if let Some(pos) = file_name.rfind('.') {
+                            file_name = file_name[..pos].to_string();
+                        }
                         files.push(file_name);
                     }
                 }
@@ -112,8 +114,12 @@ fn extract_links(v: serde_json::Value, output_path: &str) -> Vec<String> {
     } else {
         println!("No 'entries' filed find in the JSON!");
     }
-    println!("{} already dl", urls.len());
-    todo!();
+    println!(
+        "{} already dl",
+        v["entries"].as_array().unwrap().len() - urls.len()
+    );
+    println!("{} to download", urls.len());
+
     urls
 }
 
