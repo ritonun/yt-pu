@@ -102,6 +102,7 @@ fn extract_links(v: serde_json::Value, output_path: &str) -> Vec<String> {
     if let Some(entries) = v["entries"].as_array() {
         for video in entries {
             if let Some(url) = video["url"].as_str() {
+                // if local file already exist, do not push url to be downloaded
                 if let Some(title) = video["title"].as_str() {
                     if local_files.contains(&title.to_string()) {
                         println!("Already DL {}", title);
@@ -124,7 +125,7 @@ fn extract_links(v: serde_json::Value, output_path: &str) -> Vec<String> {
 }
 
 fn read_json() -> Result<serde_json::Value, std::io::Error> {
-    let mut file = fs::File::open("playlist.json")?;
+    let file = fs::File::open("playlist.json")?;
     let v: serde_json::Value = serde_json::from_reader(file)?;
     Ok(v)
 }
