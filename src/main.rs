@@ -1,228 +1,23 @@
-use clap;
-use serde_json;
-use std::collections::HashSet;
-use std::fs;
-use std::io::prelude::*;
-use std::io::Write;
-use std::process::{Command, Stdio};
-use std::str::FromStr;
-use trash;
+use serde_json::Value;
+use std::path::PathBuf;
+use std::process::Command as ProcessCommand;
 
-fn get_playlist_videos(url: &str) -> Result<String, std::io::Error> {
-    println!("yt-dlp --flat-playlist -J {}", url);
+struct Config {
+    output_path: PathBuf,
+    url: String,
+    delete_local: bool,
+}
 
-    let output = Command::new("yt-dlp")
-        .args(["--flat-playlist", "-J", url]) // JSON output
+fn get_playlist_videos(config: &Config) -> Result<Value, std::io::Error> {
+    println!("Requesting playlist {}", config.url);
+    let output = ProcessCommand::new("yt-dlp")
+        .args(["--flat-playlist", "-J", &config.url]) // JSON output
         .output()?;
 
-    let json_output = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(json_output)
-}
+    let output: String = String::from_utf8_lossy(&output.stdout).to_string();
+    let json_value: Value = serde_json::from_str(&output)?;
 
-fn list_files(output_path: &str) -> Vec<String> {
-    let mut files: Vec<String> = Vec::new();
-
-    match fs::read_dir(output_path) {
-        Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    if entry.path().is_file() {
-                        // Check if it's a file
-                        let mut file_name = entry.file_name().into_string().unwrap();
-                        if let Some(pos) = file_name.rfind('.') {
-                            file_name = file_name[..pos].to_string();
-                        }
-                        files.push(file_name);
-                    }
-                }
-            }
-        }
-        Err(e) => eprintln!("Error reading directory: {}", e),
-    };
-    files
-}
-
-fn dl_playlist(urls: Vec<String>, output_path: &str) -> Result<(), std::io::Error> {
-    // structure the output_path
-    let mut output: String = String::from_str("").unwrap();
-    output += output_path;
-    output += "%(title)s.%(ext)s";
-
-    for url in urls {
-        println!("$ yt-dlp -x --audio-format mp3 --output {} {}", output, url);
-
-        let mut output = Command::new("yt-dlp")
-            .args([
-                "--embed-thumbnail",
-                "-x",
-                "--audio-format",
-                "mp3",
-                "-f",
-                " bestaudio",
-                "--output",
-                output.as_str(),
-                &url,
-            ])
-            .stdout(Stdio::piped())
-            .spawn()?;
-        // Get the child process's stdout
-        let stdout = output.stdout.take().expect("Failed to capture stdout");
-
-        // Create a buffered reader for the output
-        let reader = std::io::BufReader::new(stdout);
-
-        // Iterate over the lines of stdout and print each line
-        for line in reader.lines() {
-            match line {
-                Ok(line) => println!("{}", line),
-                Err(e) => eprintln!("Error reading line: {}", e),
-            }
-        }
-
-        // Wait for the command to finish
-        let status = output.wait()?;
-        println!("Command finished with status: {}", status);
-    }
-    Ok(())
-}
-
-fn format_json(json_output: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Prettifying the result...");
-
-    let json_value: serde_json::Value = serde_json::from_str(json_output)?;
-    let pretty_json = serde_json::to_string_pretty(&json_value)?;
-
-    let mut file = fs::File::create("playlist.json")?;
-    file.write(pretty_json.as_bytes())?;
-
-    Ok(())
-}
-
-fn sanitize_filename(name: &str) -> String {
-    name.to_lowercase() // Convert to lowercase
-        .replace([' ', '-', '_'], "") // Remove common separators
-        .chars()
-        .filter(|c| c.is_alphanumeric()) // Keep only letters/numbers
-        .collect()
-}
-
-fn match_filename(names: &Vec<String>, filename: &String) -> bool {
-    if names
-        .iter()
-        .map(|f| sanitize_filename(f))
-        .collect::<HashSet<_>>()
-        .contains(&sanitize_filename(filename.as_str()))
-    {
-        true
-    } else {
-        false
-    }
-}
-
-fn extract_links(v: serde_json::Value, output_path: &str) -> Vec<String> {
-    let mut urls: Vec<String> = Vec::new();
-
-    // load all local files already downloaded
-    let local_files = list_files(output_path);
-
-    if let Some(entries) = v["entries"].as_array() {
-        for video in entries {
-            if let Some(url) = video["url"].as_str() {
-                // if local file already exist, do not push url to be downloaded
-                if let Some(title) = video["title"].as_str() {
-                    if match_filename(&local_files, &title.to_string()) {
-                        println!("Already DL {}", title);
-                    } else {
-                        urls.push(url.to_string());
-                    }
-                }
-            }
-        }
-    } else {
-        println!("No 'entries' filed find in the JSON!");
-    }
-    println!(
-        "{} already dl",
-        v["entries"].as_array().unwrap().len() - urls.len()
-    );
-    println!("{} to download", urls.len());
-
-    urls
-}
-
-fn read_json() -> Result<serde_json::Value, std::io::Error> {
-    let file = fs::File::open("playlist.json")?;
-    let v: serde_json::Value = serde_json::from_reader(file)?;
-    Ok(v)
-}
-
-fn find_local_not_in_playlist(v: serde_json::Value, output_path: &str) {
-    // load all local files already downloaded
-    let local_files = list_files(output_path);
-
-    // get a vector with the name of all the videos in the playlist
-    let mut video_names: Vec<String> = Vec::new();
-    if let Some(entries) = v["entries"].as_array() {
-        for video in entries {
-            if let Some(title) = video["title"].as_str() {
-                video_names.push(title.to_string());
-            }
-        }
-    } else {
-        println!("No 'entries' filed find in the JSON!");
-    }
-
-    let mut file_to_move: Vec<String> = Vec::new();
-    for local_file in local_files {
-        if match_filename(&video_names, &local_file) {
-        } else {
-            println!("{} not in online", local_file);
-            file_to_move.push(local_file);
-        }
-    }
-    println!("Nb of file to delete: {}", file_to_move.len());
-
-    remove_files(&file_to_move, output_path);
-}
-
-fn remove_files(files_to_move: &Vec<String>, output_path: &str) {
-    // load local file with full path
-    let mut files: Vec<String> = Vec::new();
-
-    match fs::read_dir(output_path) {
-        Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    if entry.path().is_file() {
-                        let file_path = entry.path();
-                        let file_path = file_path.to_str().unwrap();
-                        files.push(file_path.to_string());
-                    }
-                }
-            }
-        }
-        Err(e) => eprintln!("Error reading directory: {}", e),
-    };
-
-    // identify the full path that correspond to the filename to remove
-    let mut files_to_move_fullpath: Vec<String> = Vec::new();
-    for file in files_to_move.iter() {
-        match find_match_string(&files, &file) {
-            Some(path) => {
-                println!("rm {}", path);
-                files_to_move_fullpath.push(path);
-            }
-            _ => (),
-        }
-    }
-    trash::delete_all(&files_to_move_fullpath).unwrap();
-}
-
-fn find_match_string(files: &Vec<String>, file_name: &String) -> Option<String> {
-    files
-        .iter()
-        .find(|s| s.contains(file_name)) // Filter strings that contain the partial match
-        .cloned() // Convert &String to String (clone it)
+    Ok(json_value)
 }
 
 fn main() {
@@ -250,31 +45,19 @@ fn main() {
         )
         .get_matches();
 
-    let url: &str = matches.get_one::<String>("url").unwrap();
-    let output_path: &str = matches.get_one::<String>("output_path").unwrap();
-    let delete_local: bool = matches.get_flag("delete_local");
+    // match user flags with config param
+    let config = Config {
+        url: matches.get_one::<String>("url").unwrap().to_string(),
+        output_path: matches.get_one::<PathBuf>("output_path").unwrap().clone(),
+        delete_local: matches.get_flag("delete_local"),
+    };
 
-    let json = match get_playlist_videos(url) {
+    // make the request and get a json result of all the videos in the playlist
+    let json = match get_playlist_videos(&config) {
         Ok(json) => json,
         Err(e) => {
             eprintln!("Error fetching playlist: {}", e);
             return;
         }
     };
-    format_json(json.as_str()).unwrap();
-
-    let v: serde_json::Value = read_json().unwrap();
-
-    if delete_local {
-        println!("Delete local file not present in playlist");
-        find_local_not_in_playlist(v, output_path);
-    }
-
-    let v: serde_json::Value = read_json().unwrap();
-
-    let videos_urls = extract_links(v, output_path);
-    match dl_playlist(videos_urls, output_path) {
-        Ok(_) => {}
-        Err(e) => println!("Error: {}", e),
-    }
 }
