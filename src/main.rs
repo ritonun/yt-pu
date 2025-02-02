@@ -1,5 +1,6 @@
 use clap;
 use serde_json;
+use std::collections::HashSet;
 use std::fs;
 use std::io::prelude::*;
 use std::io::Write;
@@ -93,6 +94,27 @@ fn format_json(json_output: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn sanitize_filename(name: &str) -> String {
+    name.to_lowercase() // Convert to lowercase
+        .replace([' ', '-', '_'], "") // Remove common separators
+        .chars()
+        .filter(|c| c.is_alphanumeric()) // Keep only letters/numbers
+        .collect()
+}
+
+fn match_filename(names: &Vec<String>, filename: String) -> bool {
+    if names
+        .iter()
+        .map(|f| sanitize_filename(f))
+        .collect::<HashSet<_>>()
+        .contains(&sanitize_filename(filename.as_str()))
+    {
+        true
+    } else {
+        false
+    }
+}
+
 fn extract_links(v: serde_json::Value, output_path: &str) -> Vec<String> {
     let mut urls: Vec<String> = Vec::new();
 
@@ -104,7 +126,7 @@ fn extract_links(v: serde_json::Value, output_path: &str) -> Vec<String> {
             if let Some(url) = video["url"].as_str() {
                 // if local file already exist, do not push url to be downloaded
                 if let Some(title) = video["title"].as_str() {
-                    if local_files.contains(&title.to_string()) {
+                    if match_filename(&local_files, title.to_string()) {
                         println!("Already DL {}", title);
                     } else {
                         urls.push(url.to_string());
