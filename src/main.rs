@@ -1,8 +1,9 @@
 use serde_json::Value;
-use std::collections::HashSet;
 use std::fs;
+use std::io::prelude::*;
 use std::path::PathBuf;
 use std::process::Command;
+use std::str::FromStr;
 
 #[derive(Debug)]
 struct Config {
@@ -138,8 +139,55 @@ fn remove_local_dl_video(online_videos: &Vec<Video>, local_videos: &Vec<Video>) 
         }
     }
 
-    println!("{}", video_to_dl.len());
+    println!("Number of videos to download: {}", video_to_dl.len());
     video_to_dl
+}
+
+fn dl_playlist(videos: &Vec<Video>, config: &Config) -> Result<(), std::io::Error> {
+    // structure the output_path
+    let mut output: String = String::from_str("").unwrap();
+    output += config.output_path.to_str().unwrap();
+    output += "%(title)s.%(ext)s";
+
+    for video in videos {
+        println!(
+            "$ yt-dlp -x --audio-format mp3 --output {} {}",
+            output, video.url
+        );
+
+        let mut output = Command::new("yt-dlp")
+            .args([
+                "--embed-thumbnail",
+                "-x",
+                "--audio-format",
+                "mp3",
+                "-f",
+                " bestaudio",
+                "--output",
+                output.as_str(),
+                &video.url,
+            ])
+            .stdout(std::process::Stdio::piped())
+            .spawn()?;
+        // Get the child process's stdout
+        let stdout = output.stdout.take().expect("Failed to capture stdout");
+
+        // Create a buffered reader for the output
+        let reader = std::io::BufReader::new(stdout);
+
+        // Iterate over the lines of stdout and print each line
+        for line in reader.lines() {
+            match line {
+                Ok(line) => println!("{}", line),
+                Err(e) => eprintln!("Error reading line: {}", e),
+            }
+        }
+
+        // Wait for the command to finish
+        let status = output.wait()?;
+        println!("Command finished with status: {}", status);
+    }
+    Ok(())
 }
 
 fn main() {
@@ -182,4 +230,10 @@ fn main() {
 
     // create a vector of the videos to download (not already dl localy)
     let videos_to_dl = remove_local_dl_video(&online_videos, &local_videos);
+
+    // download the videos using yt-dlp
+    match dl_playlist(&videos_to_dl, &config) {
+        Ok(_) => println!("Sucessfully downloaded all videos"),
+        Err(e) => eprintln!("Error while downloading videos: {}", e),
+    }
 }
