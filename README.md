@@ -1,4 +1,4 @@
-# YT-PU
+# yt-pu
 
 YouTube Playlist updater is a tool to keep a local download of your playlist (MP3 format)
 
@@ -6,6 +6,7 @@ YouTube Playlist updater is a tool to keep a local download of your playlist (MP
 Dependencies: [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 
 Download the latest version of [yt-pu](https://github.com/ritonun/yt-pu/releases)
+Run with `./yt-pu` or add yt-pu to `$PATH`
 
 ## Use
 Standard use:
