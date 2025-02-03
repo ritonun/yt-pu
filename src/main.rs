@@ -143,6 +143,34 @@ fn remove_local_dl_video(online_videos: &Vec<Video>, local_videos: &Vec<Video>) 
     video_to_dl
 }
 
+fn remove_local_not_in_playlist(local_videos: &Vec<Video>, online_videos: &Vec<Video>) {
+    let mut video_to_remove: Vec<Video> = Vec::new();
+
+    // find all local video not in online playlist anymore
+    for local_video in local_videos {
+        match find_filename_in_vec(&online_videos, &local_video) {
+            Some(_) => {}
+            None => video_to_remove.push(Video {
+                url: (local_video.url).to_string(),
+                name: (local_video.name).to_string(),
+                path: local_video.path.clone(),
+            }),
+        }
+    }
+
+    // remove the videos not found online
+    for video in video_to_remove {
+        match trash::delete(&video.path) {
+            Ok(_) => println!("Moved to trash: {}", video.path.to_string_lossy()),
+            Err(e) => eprintln!(
+                "Failed to move to trash {} due to error: {}",
+                video.path.to_string_lossy(),
+                e
+            ),
+        }
+    }
+}
+
 fn dl_playlist(videos: &Vec<Video>, config: &Config) -> Result<(), std::io::Error> {
     // structure the output_path
     let mut output: String = String::from_str("").unwrap();
@@ -227,6 +255,11 @@ fn main() {
 
     // create vector containning all online video
     let online_videos = get_online_videos(&config);
+
+    // if option --delete-local, remove local files that are not in the playlist anymore
+    if config.delete_local {
+        remove_local_not_in_playlist(&local_videos, &online_videos);
+    }
 
     // create a vector of the videos to download (not already dl localy)
     let videos_to_dl = remove_local_dl_video(&online_videos, &local_videos);
