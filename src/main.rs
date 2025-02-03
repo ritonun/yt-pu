@@ -1,14 +1,17 @@
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[derive(Debug)]
 struct Config {
     output_path: PathBuf,
     url: String,
     delete_local: bool,
 }
 
+#[derive(Debug)]
 struct Video {
     path: PathBuf,
     name: String,
@@ -87,6 +90,58 @@ fn get_local_videos(config: &Config) -> Vec<Video> {
     videos
 }
 
+fn find_filename_in_vec(videos: &Vec<Video>, video: &Video) -> Option<Video> {
+    // create a list of all filenames
+    // sanitize filename and video name
+    // find match (or not)
+
+    let treshold = 10;
+    let match_video = videos
+        .iter()
+        .min_by_key(|v| strsim::levenshtein(&v.name, &video.name))
+        .and_then(|v| {
+            if strsim::levenshtein(&v.name, &video.name) <= treshold {
+                Some(v)
+            } else {
+                None
+            }
+        });
+
+    match match_video {
+        Some(v) => {
+            let video = Video {
+                url: (v.url).to_string(),
+                name: (v.name).to_string(),
+                path: v.path.clone(),
+            };
+            Some(video)
+        }
+        None => None,
+    }
+}
+
+fn remove_local_dl_video(online_videos: &Vec<Video>, local_videos: &Vec<Video>) -> Vec<Video> {
+    let mut video_to_dl: Vec<Video> = Vec::new();
+
+    for online_video in online_videos {
+        // if video not already in local folder, add to list to dl
+        match find_filename_in_vec(&local_videos, &online_video) {
+            Some(_) => {}
+            None => {
+                let v = Video {
+                    url: (online_video.url).to_string(),
+                    name: (online_video.name).to_string(),
+                    path: online_video.path.clone(),
+                };
+                video_to_dl.push(v);
+            }
+        }
+    }
+
+    println!("{}", video_to_dl.len());
+    video_to_dl
+}
+
 fn main() {
     let matches = clap::Command::new("yt-pu")
         .version("0.1.0")
@@ -125,5 +180,6 @@ fn main() {
     // create vector containning all online video
     let online_videos = get_online_videos(&config);
 
-    println!("{} {}", local_videos.len(), online_videos.len());
+    // create a vector of the videos to download (not already dl localy)
+    let videos_to_dl = remove_local_dl_video(&online_videos, &local_videos);
 }

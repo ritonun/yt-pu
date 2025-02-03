@@ -1768,6 +1768,7 @@ dependencies = [
  "clap",
  "reqwest",
  "serde_json",
+ "strsim",
  "trash",
 ]
 
