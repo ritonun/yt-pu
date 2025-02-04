@@ -220,7 +220,7 @@ fn dl_playlist(videos: &Vec<Video>, config: &Config) -> Result<(), std::io::Erro
 
 fn main() {
     let matches = clap::Command::new("yt-pu")
-        .version("0.1.0")
+        .version("1.0.0")
         .about("Keep a local save of your yt playlist")
         .arg(
             clap::Arg::new("output_path")
