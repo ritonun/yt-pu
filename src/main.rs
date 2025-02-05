@@ -117,7 +117,7 @@ fn find_filename_in_vec(videos: &Vec<Video>, video: &Video) -> Option<Video> {
             };
             Some(video)
         }
-        None => None,
+        _ => None,
     }
 }
 
@@ -175,7 +175,7 @@ fn dl_playlist(videos: &Vec<Video>, config: &Config) -> Result<(), std::io::Erro
     // structure the output_path
     let mut output: String = String::from_str("").unwrap();
     output += config.output_path.to_str().unwrap();
-    output += "%(title)s.%(ext)s";
+    output += "/%(title)s.%(ext)s";
 
     for video in videos {
         println!(
