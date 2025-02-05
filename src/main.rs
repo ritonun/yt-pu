@@ -177,13 +177,16 @@ fn dl_playlist(videos: &Vec<Video>, config: &Config) -> Result<(), std::io::Erro
     output += config.output_path.to_str().unwrap();
     output += "/%(title)s.%(ext)s";
 
+    let mut count = 0;
+
     for video in videos {
         println!(
             "$ yt-dlp --embed-thumbnail -x --audio-format m4a --audio-quality 0 --output {} {}",
             output, video.url
         );
+        println!("yt-pu progress: {}/{}", count + 1, videos.len());
 
-        let mut output = Command::new("yt-dlp")
+        let output = Command::new("yt-dlp")
             .args([
                 "--embed-thumbnail",
                 "-f",
@@ -201,6 +204,7 @@ fn dl_playlist(videos: &Vec<Video>, config: &Config) -> Result<(), std::io::Erro
         } else {
             eprintln!("Failed to download video with exit status {}", output);
         }
+        count += 1;
     }
     Ok(())
 }
