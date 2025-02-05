@@ -16,5 +16,5 @@ yt-pu --output_path [path] url
 
 If you want to sync your local folder to your playlist, you can delete the local files when you remove a video from the playlist by using the `--delete_local` flag.
 ```bash
-yt-pu --output_path [path] --delete_local url
+yt-pu --output_path [path] --delete_local [url]
 ```
