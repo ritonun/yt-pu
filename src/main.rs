@@ -179,48 +179,35 @@ fn dl_playlist(videos: &Vec<Video>, config: &Config) -> Result<(), std::io::Erro
 
     for video in videos {
         println!(
-            "$ yt-dlp -x --audio-format mp3 --output {} {}",
+            "$ yt-dlp --embed-thumbnail -x --audio-format m4a --audio-quality 0 --output {} {}",
             output, video.url
         );
 
         let mut output = Command::new("yt-dlp")
             .args([
                 "--embed-thumbnail",
-                "-x",
-                "--audio-format",
-                "mp3",
                 "-f",
-                " bestaudio",
+                "bestaudio[ext=m4a]",
                 "--output",
                 output.as_str(),
                 &video.url,
             ])
-            .stdout(std::process::Stdio::piped())
-            .spawn()?;
-        // Get the child process's stdout
-        let stdout = output.stdout.take().expect("Failed to capture stdout");
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .status()?;
 
-        // Create a buffered reader for the output
-        let reader = std::io::BufReader::new(stdout);
-
-        // Iterate over the lines of stdout and print each line
-        for line in reader.lines() {
-            match line {
-                Ok(line) => println!("{}", line),
-                Err(e) => eprintln!("Error reading line: {}", e),
-            }
+        if output.success() {
+            println!("Video downloaded (exit_status: {})", output);
+        } else {
+            eprintln!("Failed to download video with exit status {}", output);
         }
-
-        // Wait for the command to finish
-        let status = output.wait()?;
-        println!("Command finished with status: {}", status);
     }
     Ok(())
 }
 
 fn main() {
     let matches = clap::Command::new("yt-pu")
-        .version("1.0.1")
+        .version("1.1.0")
         .about("Keep a local save of your yt playlist")
         .arg(
             clap::Arg::new("output_path")
