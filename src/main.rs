@@ -31,8 +31,6 @@ fn main() {
     // from online playlist
     utils::remove_local_not_in_playlist(&local_videos, &online_videos);
 
-    todo!();
-
     // download videos
     match dl::dl_playlist(&online_videos, &config) {
         Ok(_) => println!("[yt-pu] Succesfully downloaded playlist"),
